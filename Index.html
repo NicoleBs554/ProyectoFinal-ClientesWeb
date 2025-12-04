@@ -1,10 +1,9 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>Sistema de Finanzas Personales</title>
-    <link rel="stylesheet" href="styles.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
@@ -19,18 +18,19 @@
                 <a href="#categorias" data-section="categorias">Categorías</a>
                 <a href="#presupuestos" data-section="presupuestos">Presupuestos</a>
             </nav>
+
             <div class="content-area">
-                <!-- Dashboard -->
                 <section id="dashboard" class="section active">
-                    <h2>Dashboard Financiero</h2>
+                    <h2 id="dashboard-title" tabindex="-1">Dashboard Financiero</h2>
+
                     <div class="dashboard-controls">
                         <select id="dashboard-filtro-mes">
                             <option value="2024-01">Enero 2024</option>
                             <option value="2024-02">Febrero 2024</option>
                             <option value="2024-03">Marzo 2024</option>
-                            <!-- ...otros meses... -->
                         </select>
                     </div>
+
                     <div class="dashboard-grid">
                         <div class="card" data-id="summary-income">
                             <h3>Ingresos</h3>
@@ -49,6 +49,7 @@
                             <p id="dashboard-presupuesto">$0.00</p>
                         </div>
                     </div>
+
                     <div class="charts-container">
                         <div class="chart-card">
                             <canvas id="expensesByCategoryChart"></canvas>
@@ -63,12 +64,13 @@
                             <canvas id="annualBalanceChart"></canvas>
                         </div>
                     </div>
+
                     <div class="dashboard-budget-status">
                         <h3>Estado del Presupuesto Actual</h3>
                         <div id="dashboard-presupuesto-detalle">
-                            <!-- JS: detalle presupuesto -->
                         </div>
                     </div>
+
                     <div class="recent-transactions">
                         <h3>Transacciones Recientes</h3>
                         <table>
@@ -82,26 +84,29 @@
                                 </tr>
                             </thead>
                             <tbody id="dashboard-transacciones-recientes">
-                                <!-- JS: transacciones recientes -->
                             </tbody>
                         </table>
                     </div>
                 </section>
-                <!-- Transacciones -->
                 <section id="transacciones" class="section">
-                    <h2>Gestión de Transacciones</h2>
+                    <h2 id="form-transaccion-titulo" tabindex="-1">Gestión de Transacciones</h2>
+
                     <div class="filtros-container">
                         <select id="filtro-tipo">
                             <option value="">Todos los tipos</option>
                             <option value="ingreso">Ingresos</option>
                             <option value="egreso">Egresos</option>
                         </select>
+
                         <select id="filtro-categoria">
                             <option value="">Todas las categorías</option>
                         </select>
+
                         <input type="text" id="busqueda" placeholder="Buscar por descripción o categoría...">
+
                         <input type="month" id="filtro-mes">
-                        <button id="btn-limpiar-filtros">Limpiar Filtros</button>
+
+                        <button id="btn-limpiar-filtros" type="button">Limpiar Filtros</button>
                     </div>
                     <form id="form-transaccion">
                         <input type="hidden" id="transaction-id" data-id="">
@@ -146,19 +151,34 @@
                                 </tr>
                             </thead>
                             <tbody id="cuerpo-tabla-transacciones">
-                                <!-- JS: transacciones -->
                             </tbody>
                         </table>
                     </div>
+                    <div class="resumen-transacciones">
+                        <p><strong>Total ingresos:</strong> <span id="total-ingresos">$0.00</span></p>
+                        <p><strong>Total egresos:</strong> <span id="total-egresos">$0.00</span></p>
+                        <p><strong>Balance:</strong> <span id="balance-transacciones">$0.00</span></p>
+                    </div>
                 </section>
-                <!-- Categorías -->
                 <section id="categorias" class="section">
-                    <h2>Gestión de Categorías</h2>
+                    <h2 id="form-categoria-titulo" tabindex="-1">Gestión de Categorías</h2>
                     <form id="form-categoria">
                         <input type="hidden" id="category-id" data-id="">
+
                         <div class="form-group">
                             <label for="nombre-categoria">Nombre:</label>
                             <input type="text" id="nombre-categoria" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="tipo-categoria">Tipo:</label>
+                            <select id="tipo-categoria">
+                                <option value="egreso">Egreso</option>
+                                <option value="ingreso">Ingreso</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="color-categoria">Color:</label>
+                            <input type="color" id="color-categoria" value="#3498db">
                         </div>
                         <div class="form-buttons">
                             <button type="submit" id="btn-agregar-categoria">Agregar</button>
@@ -168,11 +188,9 @@
                     <div class="lista-categorias">
                         <h3>Categorías Disponibles</h3>
                         <div class="categorias-grid" id="lista-categorias">
-                            <!-- JS: categorías -->
                         </div>
                     </div>
                 </section>
-                <!-- Presupuestos -->
                 <section id="presupuestos" class="section">
                     <h2>Gestión de Presupuestos</h2>
                     <form id="form-presupuesto">
@@ -210,21 +228,18 @@
                                 </tr>
                             </thead>
                             <tbody id="cuerpo-tabla-presupuestos">
-                                <!-- JS: presupuestos -->
                             </tbody>
                         </table>
                     </div>
                     <div class="presupuesto-proyeccion">
                         <h3>Proyección Mensual de Egresos</h3>
                         <div id="proyeccion-egresos">
-                            <!-- JS: proyección egresos -->
                         </div>
                     </div>
                 </section>
             </div>
         </main>
-        <!-- Modal para formularios y confirmaciones -->
-        <div id="modal-formulario" class="modal">
+        <div id="modal-formulario" class="modal" style="display:none;">
             <div class="modal-content">
                 <h3 id="modal-form-titulo"></h3>
                 <div id="modal-form-body"></div>
@@ -234,7 +249,7 @@
                 </div>
             </div>
         </div>
-        <div id="modal-confirmacion" class="modal">
+        <div id="modal-confirmacion" class="modal" style="display:none;">
             <div class="modal-content">
                 <h3 id="modal-titulo">Confirmación</h3>
                 <p id="modal-mensaje">¿Está seguro de que desea realizar esta acción?</p>
