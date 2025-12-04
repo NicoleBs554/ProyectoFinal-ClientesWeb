@@ -59,10 +59,9 @@ function guardarTransacciones() {
 }
 
 function inicializarEventos() {
-    document.querySelectorAll('nav a').forEach(btn => {
-        btn.classList.add('nav-btn');
-        btn.addEventListener('click', cambiarSeccion);
-    });
+    document.querySelectorAll('.sidebar a').forEach(btn => {
+    btn.addEventListener('click', cambiarSeccion);
+});
     const formCategoria = document.getElementById('form-categoria');
     if (formCategoria) formCategoria.addEventListener('submit', manejarSubmitCategoria);
     const btnCancelarCategoria = document.getElementById('btn-cancelar-categoria');
