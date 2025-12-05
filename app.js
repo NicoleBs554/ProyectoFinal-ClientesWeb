@@ -12,64 +12,140 @@ const CATEGORIAS_PREDEFINIDAS = [
 
 let categorias = [];
 let transacciones = [];
+let presupuestos = []; 
 let modoEdicion = false;
 let elementoEditando = null;
 
-function inicializarAplicacion() {
-    cargarDatos();
+const DB_NAME = 'finanzas_db';
+const DB_VERSION = 1;
+const STORE_CATEGORIAS = 'categorias';
+const STORE_TRANSACCIONES = 'transacciones';
+const STORE_PRESUPUESTOS = 'presupuestos';
+
+function openDB() {
+    return new Promise((resolve, reject) => {
+        const req = indexedDB.open(DB_NAME, DB_VERSION);
+        req.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains(STORE_CATEGORIAS)) {
+                db.createObjectStore(STORE_CATEGORIAS, { keyPath: 'id' });
+            }
+            if (!db.objectStoreNames.contains(STORE_TRANSACCIONES)) {
+                db.createObjectStore(STORE_TRANSACCIONES, { keyPath: 'id' });
+            }
+            if (!db.objectStoreNames.contains(STORE_PRESUPUESTOS)) {
+                db.createObjectStore(STORE_PRESUPUESTOS, { keyPath: 'id' });
+            }
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+    });
+}
+
+async function dbGetAll(storeName) {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(storeName, 'readonly');
+        const store = tx.objectStore(storeName);
+        const req = store.getAll();
+        req.onsuccess = () => resolve(req.result || []);
+        req.onerror = () => reject(req.error);
+    });
+}
+
+async function dbPut(storeName, item) {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(storeName, 'readwrite');
+        const store = tx.objectStore(storeName);
+        const req = store.put(item);
+        req.onsuccess = () => resolve(item);
+        req.onerror = () => reject(req.error);
+    });
+}
+
+async function dbDelete(storeName, key) {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(storeName, 'readwrite');
+        const store = tx.objectStore(storeName);
+        const req = store.delete(key);
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject(req.error);
+    });
+}
+
+async function migrateFromLocalStorageIfNeeded() {
+    const migratedFlag = localStorage.getItem('finanzas_migrado_idx');
+    if (migratedFlag) return;
+
+    const cats = JSON.parse(localStorage.getItem('finanzas_categorias') || '[]');
+    const trans = JSON.parse(localStorage.getItem('finanzas_transacciones') || '[]');
+    const budgets = JSON.parse(localStorage.getItem('finanzas_presupuestos') || '[]');
+
+    const categoriasParaGuardar = cats.length ? cats : [...CATEGORIAS_PREDEFINIDAS];
+
+    await Promise.all(categoriasParaGuardar.map(c => dbPut(STORE_CATEGORIAS, c)));
+    await Promise.all(trans.map(t => dbPut(STORE_TRANSACCIONES, t)));
+    await Promise.all(budgets.map(b => dbPut(STORE_PRESUPUESTOS, b)));
+
+    localStorage.setItem('finanzas_migrado_idx', '1');
+}
+
+async function inicializarAplicacion() {
+    await cargarDatos();
+    await cargarPresupuestos();
     inicializarEventos();
     inicializarFechas();
     renderizarCategorias();
-    renderizarTransacciones();
-    actualizarDashboard();
     actualizarSelectoresCategorias();
+    actualizarSelectoresPresupuesto();
+    renderizarTransacciones();
+    renderizarPresupuestos();
+    actualizarDashboard();
 }
 
-function cargarDatos() {
-    const categoriasGuardadas = localStorage.getItem('finanzas_categorias');
-    if (categoriasGuardadas) {
-        try {
-            categorias = JSON.parse(categoriasGuardadas);
-        } catch (e) {
-            categorias = [...CATEGORIAS_PREDEFINIDAS];
-            guardarCategorias();
-        }
-    } else {
+async function cargarDatos() {
+    await migrateFromLocalStorageIfNeeded();
+    categorias = await dbGetAll(STORE_CATEGORIAS);
+    if (!categorias.length) {
         categorias = [...CATEGORIAS_PREDEFINIDAS];
-        guardarCategorias();
+        await Promise.all(categorias.map(c => dbPut(STORE_CATEGORIAS, c)));
     }
-    
-    const transaccionesGuardadas = localStorage.getItem('finanzas_transacciones');
-    if (transaccionesGuardadas) {
-        try {
-            transacciones = JSON.parse(transaccionesGuardadas);
-        } catch (e) {
-            transacciones = [];
-            guardarTransacciones();
-        }
-    }
+    transacciones = await dbGetAll(STORE_TRANSACCIONES);
 }
 
-function guardarCategorias() {
-    localStorage.setItem('finanzas_categorias', JSON.stringify(categorias));
+async function cargarPresupuestos() {
+    presupuestos = await dbGetAll(STORE_PRESUPUESTOS);
 }
 
-function guardarTransacciones() {
-    localStorage.setItem('finanzas_transacciones', JSON.stringify(transacciones));
+async function guardarCategorias() {
+    await Promise.all(categorias.map(c => dbPut(STORE_CATEGORIAS, c)));
+}
+
+async function guardarTransacciones() {
+    await Promise.all(transacciones.map(t => dbPut(STORE_TRANSACCIONES, t)));
+}
+
+async function guardarPresupuestos() {
+    await Promise.all(presupuestos.map(p => dbPut(STORE_PRESUPUESTOS, p)));
 }
 
 function inicializarEventos() {
     document.querySelectorAll('.sidebar a').forEach(btn => {
-    btn.addEventListener('click', cambiarSeccion);
-});
+        btn.addEventListener('click', cambiarSeccion);
+    });
+
     const formCategoria = document.getElementById('form-categoria');
     if (formCategoria) formCategoria.addEventListener('submit', manejarSubmitCategoria);
     const btnCancelarCategoria = document.getElementById('btn-cancelar-categoria');
     if (btnCancelarCategoria) btnCancelarCategoria.addEventListener('click', cancelarEdicionCategoria);
+
     const formTransaccion = document.getElementById('form-transaccion');
     if (formTransaccion) formTransaccion.addEventListener('submit', manejarSubmitTransaccion);
     const btnCancelarTrans = document.getElementById('btn-cancelar-transaccion');
     if (btnCancelarTrans) btnCancelarTrans.addEventListener('click', cancelarEdicionTransaccion);
+
     const filtroTipo = document.getElementById('filtro-tipo');
     if (filtroTipo) filtroTipo.addEventListener('change', filtrarTransacciones);
     const filtroCategoria = document.getElementById('filtro-categoria');
@@ -82,6 +158,14 @@ function inicializarEventos() {
     if (btnLimpiar) btnLimpiar.addEventListener('click', limpiarFiltros);
     const btnModalCancelar = document.getElementById('btn-modal-cancelar');
     if (btnModalCancelar) btnModalCancelar.addEventListener('click', cerrarModal);
+
+    const dashMes = document.getElementById('dashboard-filtro-mes');
+    if (dashMes) dashMes.addEventListener('change', actualizarDashboard);
+
+    const formPres = document.getElementById('form-presupuesto');
+    const cancelarPres = document.getElementById('btn-cancelar-presupuesto');
+    if (formPres) formPres.addEventListener('submit', manejarSubmitPresupuesto);
+    if (cancelarPres) cancelarPres.addEventListener('click', limpiarFormularioPresupuesto);
 }
 
 function inicializarFechas() {
@@ -95,23 +179,22 @@ function inicializarFechas() {
 function cambiarSeccion(e) {
     e.preventDefault();
     const seccionId = e.currentTarget.dataset.section;
-    document.querySelectorAll('.nav-btn').forEach(btn => {
-        btn.classList.remove('active');
-    });
+
+    document.querySelectorAll('.sidebar a').forEach(btn => btn.classList.remove('active'));
     e.currentTarget.classList.add('active');
-    document.querySelectorAll('.section').forEach(section => {
-        section.classList.remove('active');
-    });
+
+    document.querySelectorAll('.section').forEach(section => section.classList.remove('active'));
     const targetSection = document.getElementById(seccionId);
     if (targetSection) {
         targetSection.classList.add('active');
-        targetSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        history.replaceState(null, '', `#${seccionId}`);
     }
+
     if (seccionId === 'dashboard') {
         actualizarDashboard();
     } else if (seccionId === 'transacciones') {
         renderizarTransacciones();
+    } else if (seccionId === 'presupuestos') {
+        renderizarPresupuestos();
     }
 }
 
@@ -146,7 +229,7 @@ function renderizarCategorias() {
     });
 }
 
-function manejarSubmitCategoria(e) {
+async function manejarSubmitCategoria(e) {
     e.preventDefault();
     const idElem = document.getElementById('category-id');
     const id = idElem ? idElem.value : '';
@@ -159,29 +242,20 @@ function manejarSubmitCategoria(e) {
         mostrarAlerta('El nombre de la categoría es obligatorio', 'error');
         return;
     }
-    
     if (modoEdicion && elementoEditando) {
         const index = categorias.findIndex(c => c.id === elementoEditando);
         if (index !== -1) {
             categorias[index] = { ...categorias[index], nombre, tipo, color };
         }
     } else {
-        const nuevaCategoria = {
-            id: 'cat_' + Date.now(),
-            nombre,
-            tipo,
-            color
-        };
+        const nuevaCategoria = { id: 'cat_' + Date.now(), nombre, tipo, color };
         categorias.push(nuevaCategoria);
     }
-    guardarCategorias();
+    await guardarCategorias();
     renderizarCategorias();
     actualizarSelectoresCategorias();
     limpiarFormularioCategoria();
-    mostrarAlerta(
-        modoEdicion ? 'Categoría actualizada' : 'Categoría creada',
-        'success'
-    );
+    mostrarAlerta(modoEdicion ? 'Categoría actualizada' : 'Categoría creada', 'success');
 }
 
 function editarCategoria(e) {
@@ -209,10 +283,8 @@ function solicitarEliminarCategoria(e) {
     const btn = e.currentTarget;
     const categoriaId = btn?.dataset.id || e.target.closest('button')?.dataset.id;
     const categoria = categorias.find(c => c.id === categoriaId);
-    
     if (!categoria) return;
     const tieneTransacciones = transacciones.some(t => t.categoriaId === categoriaId);
-    
     if (tieneTransacciones) {
         mostrarModalConfirmacion(
             'Eliminar Categoría',
@@ -228,13 +300,15 @@ function solicitarEliminarCategoria(e) {
     }
 }
 
-function confirmarEliminarCategoria(categoriaId, eliminarTransacciones) {
+async function confirmarEliminarCategoria(categoriaId, eliminarTransacciones) {
     if (eliminarTransacciones) {
+        const aEliminar = transacciones.filter(t => t.categoriaId === categoriaId).map(t => t.id);
         transacciones = transacciones.filter(t => t.categoriaId !== categoriaId);
-        guardarTransacciones();
+        await Promise.all(aEliminar.map(id => dbDelete(STORE_TRANSACCIONES, id)));
     }
     categorias = categorias.filter(c => c.id !== categoriaId);
-    guardarCategorias();
+    await dbDelete(STORE_CATEGORIAS, categoriaId);
+    await guardarCategorias();
     renderizarCategorias();
     actualizarSelectoresCategorias();
     renderizarTransacciones();
@@ -251,7 +325,7 @@ function limpiarFormularioCategoria() {
     modoEdicion = false;
     elementoEditando = null;
     const tituloElem = document.getElementById('form-categoria-titulo');
-    if (tituloElem) tituloElem.textContent = 'Nueva Categoría';
+    if (tituloElem) tituloElem.textContent = 'Gestión de Categorías';
     const form = document.getElementById('form-categoria');
     if (form) form.reset();
     const idElem = document.getElementById('category-id');
@@ -280,9 +354,32 @@ function actualizarSelectoresCategorias() {
         if (selectorTransaccion) selectorTransaccion.appendChild(option.cloneNode(true));
         if (selectorFiltro) selectorFiltro.appendChild(option.cloneNode(true));
     });
+    const selPresupuesto = document.getElementById('presupuesto-categoria');
+    if (selPresupuesto) {
+        selPresupuesto.innerHTML = '';
+        categorias.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c.id;
+            opt.textContent = c.nombre;
+            selPresupuesto.appendChild(opt);
+        });
+    }
 }
 
-function manejarSubmitTransaccion(e) {
+
+function actualizarSelectoresPresupuesto() {
+    const sel = document.getElementById('presupuesto-categoria');
+    if (!sel) return;
+    sel.innerHTML = '';
+    categorias.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = c.nombre;
+        sel.appendChild(opt);
+    });
+}
+
+async function manejarSubmitTransaccion(e) {
     e.preventDefault();
     const idElem = document.getElementById('transaction-id');
     const id = idElem ? idElem.value : '';
@@ -292,25 +389,13 @@ function manejarSubmitTransaccion(e) {
     const fecha = document.getElementById('fecha')?.value;
     const categoriaId = document.getElementById('categoria-transaccion')?.value;
     const descripcion = document.getElementById('descripcion')?.value.trim();
-    if (!tipo) {
-        mostrarAlerta('Debe seleccionar el tipo de transacción', 'error');
-        return;
-    }
-    if (!monto || monto <= 0) {
-        mostrarAlerta('El monto debe ser mayor a cero', 'error');
-        return;
-    }
-    if (!categoriaId) {
-        mostrarAlerta('Debe seleccionar una categoría', 'error');
-        return;
-    }
+    if (!tipo) return mostrarAlerta('Debe seleccionar el tipo de transacción', 'error');
+    if (!monto || monto <= 0) return mostrarAlerta('El monto debe ser mayor a cero', 'error');
+    if (!categoriaId) return mostrarAlerta('Debe seleccionar una categoría', 'error');
+
     const transaccionData = {
         id: id || 'trans_' + Date.now(),
-        tipo,
-        monto,
-        fecha,
-        categoriaId,
-        descripcion,
+        tipo, monto, fecha, categoriaId, descripcion,
         fechaRegistro: new Date().toISOString()
     };
     if (modoEdicion && elementoEditando) {
@@ -322,14 +407,11 @@ function manejarSubmitTransaccion(e) {
         transacciones.push(transaccionData);
     }
     transacciones.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
-    guardarTransacciones();
+    await guardarTransacciones();
     renderizarTransacciones();
     actualizarDashboard();
     limpiarFormularioTransaccion();
-    mostrarAlerta(
-        modoEdicion ? 'Transacción actualizada' : 'Transacción registrada',
-        'success'
-    );
+    mostrarAlerta(modoEdicion ? 'Transacción actualizada' : 'Transacción registrada', 'success');
 }
 
 function renderizarTransacciones(filtradas = null) {
@@ -346,22 +428,15 @@ function renderizarTransacciones(filtradas = null) {
         actualizarResumenTransacciones([]);
         return;
     }
-    
     datos.forEach(transaccion => {
         const categoria = categorias.find(c => c.id === transaccion.categoriaId);
         const row = document.createElement('tr');
         row.innerHTML = `
             <td>${formatearFecha(transaccion.fecha)}</td>
             <td>${transaccion.descripcion || '-'}</td>
-            <td><span class="badge-categoria" style="background-color: ${categoria?.color || '#ccc'}">
-                ${categoria?.nombre || 'Sin categoría'}
-            </span></td>
-            <td><span class="tipo-badge ${transaccion.tipo}">
-                ${transaccion.tipo === 'ingreso' ? 'Ingreso' : 'Egreso'}
-            </span></td>
-            <td class="${transaccion.tipo === 'ingreso' ? 'positive' : 'negative'}">
-                ${transaccion.tipo === 'ingreso' ? '+' : '-'}$${transaccion.monto.toFixed(2)}
-            </td>
+            <td><span class="badge-categoria" style="background-color: ${categoria?.color || '#ccc'}">${categoria?.nombre || 'Sin categoría'}</span></td>
+            <td><span class="tipo-badge ${transaccion.tipo}">${transaccion.tipo === 'ingreso' ? 'Ingreso' : 'Egreso'}</span></td>
+            <td class="${transaccion.tipo === 'ingreso' ? 'positive' : 'negative'}">${transaccion.tipo === 'ingreso' ? '+' : '-'}$${transaccion.monto.toFixed(2)}</td>
             <td>
                 <button class="btn-accion btn-editar-trans" data-id="${transaccion.id}">✏️</button>
                 <button class="btn-accion btn-eliminar-trans" data-id="${transaccion.id}">🗑️</button>
@@ -384,21 +459,15 @@ function filtrarTransacciones() {
     const busqueda = document.getElementById('busqueda')?.value.toLowerCase();
     const mes = document.getElementById('filtro-mes')?.value;
     let filtradas = transacciones;
-    if (tipo) {
-        filtradas = filtradas.filter(t => t.tipo === tipo);
-    }
-    if (categoria) {
-        filtradas = filtradas.filter(t => t.categoriaId === categoria);
-    }
+    if (tipo) filtradas = filtradas.filter(t => t.tipo === tipo);
+    if (categoria) filtradas = filtradas.filter(t => t.categoriaId === categoria);
     if (busqueda) {
         filtradas = filtradas.filter(t => 
             (t.descripcion && t.descripcion.toLowerCase().includes(busqueda)) ||
             categorias.find(c => c.id === t.categoriaId)?.nombre.toLowerCase().includes(busqueda)
         );
     }
-    if (mes) {
-        filtradas = filtradas.filter(t => t.fecha && t.fecha.startsWith(mes));
-    }
+    if (mes) filtradas = filtradas.filter(t => t.fecha && t.fecha.startsWith(mes));
     renderizarTransacciones(filtradas);
 }
 
@@ -449,9 +518,10 @@ function solicitarEliminarTransaccion(e) {
     );
 }
 
-function confirmarEliminarTransaccion(transaccionId) {
+async function confirmarEliminarTransaccion(transaccionId) {
     transacciones = transacciones.filter(t => t.id !== transaccionId);
-    guardarTransacciones();
+    await dbDelete(STORE_TRANSACCIONES, transaccionId);
+    await guardarTransacciones();
     renderizarTransacciones();
     actualizarDashboard();
     mostrarAlerta('Transacción eliminada', 'success');
@@ -466,7 +536,7 @@ function limpiarFormularioTransaccion() {
     modoEdicion = false;
     elementoEditando = null;
     const tituloElem = document.getElementById('form-transaccion-titulo');
-    if (tituloElem) tituloElem.textContent = 'Nueva Transacción';
+    if (tituloElem) tituloElem.textContent = 'Gestión de Transacciones';
     const form = document.getElementById('form-transaccion');
     if (form) form.reset();
     const idElem = document.getElementById('transaction-id');
@@ -476,12 +546,8 @@ function limpiarFormularioTransaccion() {
 }
 
 function actualizarResumenTransacciones(datos) {
-    const ingresos = datos
-        .filter(t => t.tipo === 'ingreso')
-        .reduce((sum, t) => sum + t.monto, 0);
-    const egresos = datos
-        .filter(t => t.tipo === 'egreso')
-        .reduce((sum, t) => sum + t.monto, 0);
+    const ingresos = datos.filter(t => t.tipo === 'ingreso').reduce((sum, t) => sum + t.monto, 0);
+    const egresos = datos.filter(t => t.tipo === 'egreso').reduce((sum, t) => sum + t.monto, 0);
     const balance = ingresos - egresos;
     const totalIngresosElem = document.getElementById('total-ingresos');
     const totalEgresosElem = document.getElementById('total-egresos');
@@ -491,8 +557,124 @@ function actualizarResumenTransacciones(datos) {
     if (balanceElem) balanceElem.textContent = `$${balance.toFixed(2)}`;
 }
 
+function gastoRealDeCategoriaMes(categoriaId, mesYYYYMM) {
+    return transacciones
+        .filter(t => t.tipo === 'egreso' && t.categoriaId === categoriaId && t.fecha?.startsWith(mesYYYYMM))
+        .reduce((sum, t) => sum + t.monto, 0);
+}
+
+async function manejarSubmitPresupuesto(e) {
+    e.preventDefault();
+    const idInput = document.getElementById('budget-id');
+    const mes = document.getElementById('presupuesto-mes').value; // YYYY-MM
+    const categoriaId = document.getElementById('presupuesto-categoria').value;
+    const montoEstimado = parseFloat(document.getElementById('presupuesto-monto').value);
+
+    if (!mes || !categoriaId || !montoEstimado || montoEstimado <= 0) {
+        mostrarAlerta('Complete todos los campos con valores válidos', 'error');
+        return;
+    }
+
+    const id = idInput.value || ('budget_' + Date.now());
+    const existenteIdx = presupuestos.findIndex(p => p.id === id);
+    const data = { id, mes, categoriaId, montoEstimado };
+
+    if (existenteIdx !== -1) {
+        presupuestos[existenteIdx] = data;
+        mostrarAlerta('Presupuesto actualizado', 'success');
+    } else {
+        const duplicado = presupuestos.find(p => p.mes === mes && p.categoriaId === categoriaId);
+        if (duplicado) {
+            mostrarAlerta('Ya existe un presupuesto para esa categoría en ese mes', 'error');
+            return;
+        }
+        presupuestos.push(data);
+        mostrarAlerta('Presupuesto creado', 'success');
+    }
+    await guardarPresupuestos();
+    renderizarPresupuestos();
+    limpiarFormularioPresupuesto();
+    actualizarDashboard();
+}
+
+function limpiarFormularioPresupuesto() {
+    const form = document.getElementById('form-presupuesto');
+    if (form) form.reset();
+    const id = document.getElementById('budget-id');
+    if (id) id.value = '';
+}
+
+function editarPresupuesto(id) {
+    const p = presupuestos.find(x => x.id === id);
+    if (!p) return;
+    document.getElementById('budget-id').value = p.id;
+    document.getElementById('presupuesto-mes').value = p.mes;
+    document.getElementById('presupuesto-categoria').value = p.categoriaId;
+    document.getElementById('presupuesto-monto').value = p.montoEstimado;
+}
+
+async function eliminarPresupuesto(id) {
+    presupuestos = presupuestos.filter(p => p.id !== id);
+    await dbDelete(STORE_PRESUPUESTOS, id);
+    await guardarPresupuestos();
+    renderizarPresupuestos();
+    actualizarDashboard();
+    mostrarAlerta('Presupuesto eliminado', 'success');
+}
+
+function renderizarPresupuestos() {
+    const tbody = document.getElementById('cuerpo-tabla-presupuestos');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    if (!presupuestos.length) {
+        tbody.innerHTML = '<tr><td colspan="7">No hay presupuestos</td></tr>';
+        return;
+    }
+    presupuestos.forEach(p => {
+        const gastoReal = gastoRealDeCategoriaMes(p.categoriaId, p.mes);
+        const desviacion = gastoReal - p.montoEstimado;
+        const porcentaje = p.montoEstimado > 0 ? (gastoReal / p.montoEstimado) * 100 : 0;
+        const estado = porcentaje >= 100 ? 'Superado' : (porcentaje >= 80 ? 'En riesgo' : 'Dentro');
+
+        const cat = categorias.find(c => c.id === p.categoriaId);
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${cat?.nombre || 'Categoría'}</td>
+            <td>$${p.montoEstimado.toFixed(2)}</td>
+            <td>$${gastoReal.toFixed(2)}</td>
+            <td>${desviacion >= 0 ? '+' : '-'}$${(Math.abs(desviacion)).toFixed(2)}</td>
+            <td>${porcentaje.toFixed(0)}%</td>
+            <td>${estado}</td>
+            <td>
+                <button type="button" onclick="editarPresupuesto('${p.id}')">✏️</button>
+                <button type="button" onclick="eliminarPresupuesto('${p.id}')">🗑️</button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+
+        if (estado === 'Superado') {
+            tr.style.backgroundColor = '#ffe6e6';
+        } else if (estado === 'En riesgo') {
+            tr.style.backgroundColor = '#fff7e6';
+        }
+    });
+
+    const cont = document.getElementById('proyeccion-egresos');
+    if (cont) {
+        const mesSel = document.getElementById('presupuesto-mes')?.value || new Date().toISOString().slice(0, 7);
+        const egresosMes = transacciones
+            .filter(t => t.tipo === 'egreso' && t.fecha?.startsWith(mesSel))
+            .reduce((sum, t) => sum + t.monto, 0);
+        cont.textContent = `Egresos reales del mes ${mesSel}: $${egresosMes.toFixed(2)}`;
+    }
+}
+
+function getMesSeleccionadoDashboard() {
+    return document.getElementById('dashboard-filtro-mes')?.value || new Date().toISOString().slice(0, 7);
+}
+
 function actualizarDashboard() {
-    const mesActual = new Date().toISOString().slice(0, 7);
+    const mesActual = getMesSeleccionadoDashboard();
     const ingresosMes = transacciones
         .filter(t => t.tipo === 'ingreso' && t.fecha && t.fecha.startsWith(mesActual))
         .reduce((sum, t) => sum + t.monto, 0);
@@ -500,70 +682,83 @@ function actualizarDashboard() {
         .filter(t => t.tipo === 'egreso' && t.fecha && t.fecha.startsWith(mesActual))
         .reduce((sum, t) => sum + t.monto, 0);
     const balanceTotal = transacciones
-        .filter(t => t.tipo === 'ingreso')
-        .reduce((sum, t) => sum + t.monto, 0) -
-        transacciones
-            .filter(t => t.tipo === 'egreso')
-            .reduce((sum, t) => sum + t.monto, 0);
+        .filter(t => t.tipo === 'ingreso').reduce((s, t) => s + t.monto, 0) -
+        transacciones.filter(t => t.tipo === 'egreso').reduce((s, t) => s + t.monto, 0);
+
     const balanceElem = document.getElementById('dashboard-balance');
     const ingresosElem = document.getElementById('dashboard-ingresos');
     const egresosElem = document.getElementById('dashboard-gastos');
     if (balanceElem) balanceElem.textContent = `$${balanceTotal.toFixed(2)}`;
     if (ingresosElem) ingresosElem.textContent = `$${ingresosMes.toFixed(2)}`;
     if (egresosElem) egresosElem.textContent = `$${egresosMes.toFixed(2)}`;
+
     actualizarGraficos();
+    renderizarTransaccionesRecientes();
+}
+
+function renderizarTransaccionesRecientes() {
     const recentTbody = document.getElementById('dashboard-transacciones-recientes');
-    if (recentTbody) {
-        recentTbody.innerHTML = '';
-        const recientes = transacciones.slice(0, 5);
-        if (recientes.length === 0) {
-            recentTbody.innerHTML = `<tr><td colspan="5">No hay transacciones recientes</td></tr>`;
-        } else {
-            recientes.forEach(t => {
-                const cat = categorias.find(c => c.id === t.categoriaId);
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td>${formatearFecha(t.fecha)}</td>
-                    <td>${t.descripcion || '-'}</td>
-                    <td>${cat?.nombre || 'Sin categoría'}</td>
-                    <td>${t.tipo === 'ingreso' ? 'Ingreso' : 'Egreso'}</td>
-                    <td>$${t.monto.toFixed(2)}</td>
-                `;
-                recentTbody.appendChild(tr);
-            });
-        }
+    if (!recentTbody) return;
+    recentTbody.innerHTML = '';
+    const recientes = transacciones.slice(0, 5);
+    if (!recientes.length) {
+        recentTbody.innerHTML = `<tr><td colspan="5">No hay transacciones recientes</td></tr>`;
+        return;
     }
+    recientes.forEach(t => {
+        const cat = categorias.find(c => c.id === t.categoriaId);
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${formatearFecha(t.fecha)}</td>
+            <td>${t.descripcion || '-'}</td>
+            <td>${cat?.nombre || 'Sin categoría'}</td>
+            <td>${t.tipo === 'ingreso' ? 'Ingreso' : 'Egreso'}</td>
+            <td>$${t.monto.toFixed(2)}</td>
+        `;
+        recentTbody.appendChild(tr);
+    });
+}
+
+function obtenerMesesUltimos12() {
+    const meses = [];
+    const base = new Date();
+    base.setDate(1);
+    for (let i = 11; i >= 0; i--) {
+        const d = new Date(base.getFullYear(), base.getMonth() - i, 1);
+        const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2, '0')}`;
+        meses.push(iso);
+    }
+    return meses;
 }
 
 function actualizarGraficos() {
     const canvasGastos = document.getElementById('expensesByCategoryChart');
     const canvasEvolucion = document.getElementById('annualBalanceChart');
+    const canvasBalanceVs = document.getElementById('balanceVsEstimatedChart');
+    const canvasEgresosVs = document.getElementById('expensesVsEstimatedChart');
+    const mesSel = getMesSeleccionadoDashboard();
     if (!canvasGastos || !canvasEvolucion) return;
 
     const ctxGastos = canvasGastos.getContext('2d');
     const ctxEvolucion = canvasEvolucion.getContext('2d');
-
     const gastosPorCategoria = {};
     transacciones
-        .filter(t => t.tipo === 'egreso')
+        .filter(t => t.tipo === 'egreso' && t.fecha?.startsWith(mesSel))
         .forEach(t => {
             const categoria = categorias.find(c => c.id === t.categoriaId);
             if (categoria) {
                 gastosPorCategoria[categoria.nombre] = (gastosPorCategoria[categoria.nombre] || 0) + t.monto;
             }
         });
+
     const evolucion = {};
     transacciones.forEach(t => {
         const mes = t.fecha ? t.fecha.slice(0, 7) : 'unknown';
-        if (!evolucion[mes]) {
-            evolucion[mes] = { ingresos: 0, egresos: 0 };
-        }
-        if (t.tipo === 'ingreso') {
-            evolucion[mes].ingresos += t.monto;
-        } else {
-            evolucion[mes].egresos += t.monto;
-        }
+        if (!evolucion[mes]) evolucion[mes] = { ingresos: 0, egresos: 0 };
+        if (t.tipo === 'ingreso') evolucion[mes].ingresos += t.monto;
+        else evolucion[mes].egresos += t.monto;
     });
+
     if (window.chartGastos) window.chartGastos.destroy();
     if (window.chartEvolucion) window.chartEvolucion.destroy();
     window.chartGastos = new Chart(ctxGastos, {
@@ -578,59 +773,88 @@ function actualizarGraficos() {
                 })
             }]
         },
-        options: {
-            responsive: true,
-            plugins: {
-                title: {
-                    display: true,
-                    text: 'Gastos por Categoría'
-                }
-            }
-        }
+        options: { responsive: true, plugins: { title: { display: true, text: `Gastos por categoría (${mesSel})` } } }
     });
+
     const meses = Object.keys(evolucion).sort();
     window.chartEvolucion = new Chart(ctxEvolucion, {
         type: 'line',
         data: {
             labels: meses,
             datasets: [
-                {
-                    label: 'Ingresos',
-                    data: meses.map(m => evolucion[m].ingresos),
-                    borderColor: '#27ae60',
-                    backgroundColor: 'rgba(39, 174, 96, 0.1)',
-                    tension: 0.3
-                },
-                {
-                    label: 'Egresos',
-                    data: meses.map(m => evolucion[m].egresos),
-                    borderColor: '#e74c3c',
-                    backgroundColor: 'rgba(231, 76, 60, 0.1)',
-                    tension: 0.3
-                }
+                { label: 'Ingresos', data: meses.map(m => evolucion[m].ingresos), borderColor: '#27ae60', backgroundColor: 'rgba(39,174,96,0.1)', tension: 0.3 },
+                { label: 'Egresos', data: meses.map(m => evolucion[m].egresos), borderColor: '#e74c3c', backgroundColor: 'rgba(231,76,60,0.1)', tension: 0.3 }
             ]
         },
-        options: {
-            responsive: true,
-            plugins: {
-                title: {
-                    display: true,
-                    text: 'Evolución Mensual'
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true
-                }
-            }
-        }
+        options: { responsive: true, plugins: { title: { display: true, text: 'Evolución mensual' } }, scales: { y: { beginAtZero: true } } }
     });
+
+    if (canvasBalanceVs) {
+        const ctxBalanceVs = canvasBalanceVs.getContext('2d');
+        const mesesUltimos12 = obtenerMesesUltimos12();
+        const balanceRealPorMes = mesesUltimos12.map(m => {
+            const ingresos = transacciones.filter(t => t.tipo==='ingreso' && t.fecha?.startsWith(m)).reduce((s,t)=>s+t.monto,0);
+            const egresos = transacciones.filter(t => t.tipo==='egreso' && t.fecha?.startsWith(m)).reduce((s,t)=>s+t.monto,0);
+            return ingresos - egresos;
+        });
+        const balanceEstimadoPorMes = mesesUltimos12.map(m => {
+            const estimadoEgresos = presupuestos.filter(p => p.mes === m).reduce((s,p)=>s+p.montoEstimado,0);
+            return -estimadoEgresos; 
+        });
+
+        if (window.chartBalanceVs) window.chartBalanceVs.destroy();
+        window.chartBalanceVs = new Chart(ctxBalanceVs, {
+            type: 'line',
+            data: {
+                labels: mesesUltimos12,
+                datasets: [
+                    { label: 'Balance real', data: balanceRealPorMes, borderColor: '#34495e', backgroundColor: 'rgba(52,73,94,0.1)', tension: 0.3 },
+                    { label: 'Balance estimado', data: balanceEstimadoPorMes, borderColor: '#8e44ad', backgroundColor: 'rgba(142,68,173,0.1)', tension: 0.3 }
+                ]
+            },
+            options: { responsive: true, plugins: { title: { display: true, text: 'Balance real vs estimado' } }, scales: { y: { beginAtZero: true } } }
+        });
+    }
+
+    if (canvasEgresosVs) {
+        const ctxEgresosVs = canvasEgresosVs.getContext('2d');
+        const etiquetas = categorias.map(c => c.nombre);
+        const estimados = categorias.map(c => presupuestos
+            .filter(p => p.mes === mesSel && p.categoriaId === c.id)
+            .reduce((s,p)=>s+p.montoEstimado,0)
+        );
+        const reales = categorias.map(c => transacciones
+            .filter(t => t.tipo==='egreso' && t.categoriaId===c.id && t.fecha?.startsWith(mesSel))
+            .reduce((s,t)=>s+t.monto,0)
+        );
+
+        if (window.chartEgresosVs) window.chartEgresosVs.destroy();
+        window.chartEgresosVs = new Chart(ctxEgresosVs, {
+            type: 'bar',
+            data: {
+                labels: etiquetas,
+                datasets: [
+                    { label: 'Estimado', data: estimados, backgroundColor: 'rgba(241, 196, 15, 0.6)' },
+                    { label: 'Real', data: reales, backgroundColor: 'rgba(231, 76, 60, 0.6)' }
+                ]
+            },
+            options: { responsive: true, plugins: { title: { display: true, text: `Egresos estimados vs reales (${mesSel})` } }, scales: { y: { beginAtZero: true } } }
+        });
+    }
+}
+
+function parseDateLocal(fechaStr) {
+    if (!fechaStr) return null;
+    const parts = fechaStr.split('-').map(Number);
+    if (parts.length !== 3) return null;
+    const [y, m, d] = parts;
+    return new Date(y, m - 1, d); 
 }
 
 function formatearFecha(fechaStr) {
     if (!fechaStr) return '-';
-    const fecha = new Date(fechaStr);
-    if (isNaN(fecha)) return fechaStr;
+    const fecha = parseDateLocal(fechaStr);
+    if (!fecha || isNaN(fecha)) return fechaStr;
     return fecha.toLocaleDateString('es-ES', {
         day: '2-digit',
         month: '2-digit',
@@ -638,6 +862,7 @@ function formatearFecha(fechaStr) {
     });
 }
 
+actualizarSelectoresCategorias
 function mostrarAlerta(mensaje, tipo = 'info') {
     const alerta = document.createElement('div');
     alerta.className = `alerta ${tipo}`;
@@ -649,17 +874,11 @@ function mostrarAlerta(mensaje, tipo = 'info') {
     alerta.style.borderRadius = '5px';
     alerta.style.color = 'white';
     alerta.style.zIndex = '1000';
-    if (tipo === 'success') {
-        alerta.style.backgroundColor = '#27ae60';
-    } else if (tipo === 'error') {
-        alerta.style.backgroundColor = '#e74c3c';
-    } else {
-        alerta.style.backgroundColor = '#3498db';
-    }
+    if (tipo === 'success') alerta.style.backgroundColor = '#27ae60';
+    else if (tipo === 'error') alerta.style.backgroundColor = '#e74c3c';
+    else alerta.style.backgroundColor = '#3498db';
     document.body.appendChild(alerta);
-    setTimeout(() => {
-        alerta.remove();
-    }, 3000);
+    setTimeout(() => { alerta.remove(); }, 3000);
 }
 
 function mostrarModalConfirmacion(titulo, mensaje, onConfirm) {
