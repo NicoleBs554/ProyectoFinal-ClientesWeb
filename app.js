@@ -191,37 +191,34 @@ const Categories = (function () {
     if (!contenedor) return;
     const numTransacciones = App.state.transacciones.filter(t => t.categoriaId === categoria.id).length;
     contenedor.innerHTML = '';
-    App.state.categorias.forEach(categoria => {
-      const categoriaElement = document.createElement('div');
-      categoriaElement.className = 'categoria-card';
-      categoriaElement.style.borderLeftColor = categoria.color;
-      categoriaElement.innerHTML = `
-        <div class="categoria-info">
-          <span class="categoria-color" style="background-color: ${categoria.color}"></span>
-          <div>
-            <h4>${categoria.nombre}</h4>
-            <small>${categoria.tipo === 'ingreso' ? 'Ingreso' : 'Egreso'}</small>
-          </div>
-        </div>
-        <div class="categoria-acciones">
-          <button class="btn-editar" data-id="${categoria.id}">✏️</button>
-          <button class="btn-eliminar" data-id="${categoria.id}">🗑️</button>
-        </div>
-      `;
-      contenedor.appendChild(categoriaElement);
-      categoriaElement.style.border = `3px solid ${categoria.color}`;
-      categoriaElement.style.borderRadius = '8px';  // Bordes redondeados
-      categoriaElement.style.backgroundColor = `${categoria.color}15`; 
+    categorias.forEach(categoria => {
+        const categoriaElement = document.createElement('div');
+        categoriaElement.className = 'categoria-card';
+        categoriaElement.style.borderLeftColor = categoria.color;
+        categoriaElement.innerHTML = `
+            <div class="categoria-info">
+                <span class="categoria-color" style="background-color: ${categoria.color}"></span>
+                <div>
+                    <h4>${categoria.nombre}</h4>
+                    <small>${categoria.tipo === 'ingreso' ? 'Ingreso' : 'Egreso'}</small>
+                </div>
+            </div>
+            <div class="categoria-acciones">
+                <button class="btn-editar" data-id="${categoria.id}">✏️</button>
+                <button class="btn-eliminar" data-id="${categoria.id}">🗑️</button>
+            </div>
+        `;
+        contenedor.appendChild(categoriaElement);
     });
-    const contador = document.getElementById('total-categorias');
-  if (contador) {
-    contador.textContent = `${App.state.categorias.length} CATEGORÍAS`;
-  }
-    document.querySelectorAll('.btn-editar').forEach(btn => btn.addEventListener('click', editar));
-    document.querySelectorAll('.btn-eliminar').forEach(btn => btn.addEventListener('click', solicitarEliminar));
-  }
+    document.querySelectorAll('.btn-editar').forEach(btn => {
+        btn.addEventListener('click', editarCategoria);
+    });
+    document.querySelectorAll('.btn-eliminar').forEach(btn => {
+        btn.addEventListener('click', solicitarEliminarCategoria);
+    });
+}
 
-  async function handleSubmit(e) {
+async function manejarSubmitCategoria(e) {
     e.preventDefault();
     const idElem = document.getElementById('category-id');
     const id = idElem ? idElem.value : '';
@@ -964,8 +961,4 @@ window.Categories = Categories;
 window.Dashboard = Dashboard;
 
 
-document.addEventListener('DOMContentLoaded', () => {
-  AppController.inicializar().catch(err => {
-    console.error('Error inicializando la app:', err);
-  });
-});
+document.addEventListener('DOMContentLoaded', inicializarAplicacion);
