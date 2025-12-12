@@ -72,7 +72,19 @@
                         <h2><i class="fas fa-chart-bar"></i> DASHBOARD FINANCIERO</h2>
                         <div class="section-controls">
                             <select id="dashboard-filtro-mes" class="mario-select">
-                                <!-- Opciones se generan dinámicamente en JS -->
+                            <option value="2025-01">Enero 2025</option>
+                            <option value="2025-02">Febrero 2025</option>
+                            <option value="2025-03">Marzo 2025</option>
+                            <option value="2025-04">Abril 2025</option>
+                            <option value="2025-05">Mayo 2025</option>
+                            <option value="2025-06">Junio 2025</option>
+                            <option value="2025-07">Julio 2025</option>
+                            <option value="2025-08">Agosto 2025</option>
+                            <option value="2025-09">Septiembre 2025</option>
+                            <option value="2025-10">Octubre 2025</option>
+                            <option value="2025-11">Noviembre 2025</option>
+                            <option value="2025-12">Diciembre 2025</option>
+                            <option value="2026-01">Enero 2026</option>
                             </select>
                         </div>
                     </div>
@@ -131,6 +143,24 @@
                             </div>
                             <div class="chart-wrapper">
                                 <canvas id="annualBalanceChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="chart-card">
+                            <div class="chart-header">
+                                <h3><i class="fas fa-chart-"></i> BALANCE VS ESTIMADO</h3>
+                                <span>Este mes</span>
+                            </div>
+                            <div class="chart-wrapper">
+                                <canvas id="balanceVsEstimatedChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="chart-card">
+                            <div class="chart-header">
+                                <h3><i class="fas fa-chart-line"></i> GASTOS VS ESTIMADO</h3>
+                                <span>2025</span>
+                            </div>
+                            <div class="chart-wrapper">
+                                <canvas id="expensesVsEstimatedChart"></canvas>
                             </div>
                         </div>
                     </div>
